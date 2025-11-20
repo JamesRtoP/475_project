@@ -1,5 +1,5 @@
 #OBJS specifies which files to compile as part of the project
-OBJS = main.cpp frame_operations.cpp cluster_frame.cpp k_means_cluster_frame.cpp
+OBJS = main.cpp frame_operations.cpp cluster_operations.cpp
 
 #CC specifies which compiler we're using
 CC = g++

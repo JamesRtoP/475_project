@@ -32,7 +32,9 @@ cv::Mat get_next_single_frame_difference(cv::VideoCapture video, double (*differ
 {
     cv::Mat cur_frame, next_frame;
     video >> cur_frame; //extract 1 frame from video
+    int current_frame_num = video.get(cv::CAP_PROP_POS_FRAMES);
     int is_not_last_frame = video.read(next_frame);
+    video.set(cv::CAP_PROP_POS_FRAMES, current_frame_num);
     if(!is_not_last_frame)
     {
         return next_frame;
@@ -68,3 +70,4 @@ int pixel_is_black(cv::Vec3b pixel)
         return false;
     }
 }
+

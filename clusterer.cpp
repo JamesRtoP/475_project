@@ -1,23 +1,56 @@
-#include "k_means_cluster_frame.hpp"
+#include "clusterer.hpp"
 
-k_means_cluster_frame::k_means_cluster_frame() : Clusterer()
+Clusterer::Clusterer()
 {
-    
+    this->pixel_array = nullptr;
+    this->cols = 0;
+    this->rows = 0;
+
+    this->num_clusters = 0;
+    this->clusters_array = nullptr;
 }
 
-k_means_cluster_frame::~k_means_cluster_frame()
+Clusterer::~Clusterer()
 {
-    
+    if(this->pixel_array != nullptr)
+    {
+        delete this->pixel_array;
+    }
+    if(this->clusters_array != nullptr)
+    {
+        delete(this->clusters_array);
+    }
 }
 
-int k_means_cluster_frame::distance_to_cluster(int cluster_index, int row, int col)
+int Clusterer::get_pixel(int row, int col)
+{
+    return this->pixel_array[row*this->rows + col];
+}
+
+void Clusterer::set_pixel(int row, int col, int cluster_num)
+{
+    this->pixel_array[row*this->rows + col] = cluster_num;
+}
+
+int Clusterer::get_rows()
+{
+    return this->rows;
+}
+
+int Clusterer::get_cols()
+{
+    return this->cols;
+}
+
+
+int Clusterer::distance_to_cluster(int cluster_index, int row, int col)
 {
     int x_difference = this->clusters_array[cluster_index].x - col;
     int y_difference = this->clusters_array[cluster_index].y - row;
     return sqrt(pow(x_difference,2) + pow(y_difference,2));
 }
 
-int k_means_cluster_frame::closest_cluster_index(int row, int col)
+int Clusterer::closest_cluster_index(int row, int col)
 {
     int closest_index = 0;
     int closest_distance = distance_to_cluster(0,row,col);
@@ -33,7 +66,7 @@ int k_means_cluster_frame::closest_cluster_index(int row, int col)
     return closest_index;
 }
 
-int k_means_cluster_frame::single_cluster_shift(cv::Mat& frame)
+int Clusterer::single_cluster_shift(cv::Mat& frame)
 {
     int * total_pixels_per_cluster = new int[this->num_clusters]();
     Point * total_x_and_y_per_cluster = new Point[this->num_clusters]();
@@ -44,17 +77,14 @@ int k_means_cluster_frame::single_cluster_shift(cv::Mat& frame)
             cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
             if(!pixel_is_black(cur_pixel))
             {
-                
                 int index_of_closest_cluster = closest_cluster_index(i,j);
                 this->set_pixel(i,j,index_of_closest_cluster);
                 cur_pixel[0] = colors[index_of_closest_cluster][0];
                 cur_pixel[1] = colors[index_of_closest_cluster][1];
                 cur_pixel[2] = colors[index_of_closest_cluster][2];
-
                 total_pixels_per_cluster[index_of_closest_cluster]++;
                 total_x_and_y_per_cluster[index_of_closest_cluster].x += j;
                 total_x_and_y_per_cluster[index_of_closest_cluster].y += i;
-
             }
         }
 
@@ -83,7 +113,7 @@ int k_means_cluster_frame::single_cluster_shift(cv::Mat& frame)
     
 }
 
-void k_means_cluster_frame::cluster_single_frame(cv::Mat &frame)
+void Clusterer::cluster_single_frame(cv::Mat &frame)
 {
     while(!this->single_cluster_shift(frame))
     {
@@ -91,7 +121,7 @@ void k_means_cluster_frame::cluster_single_frame(cv::Mat &frame)
     }
 }
 
-void k_means_cluster_frame::paint_clusters(cv::Mat &frame, int radius)
+void Clusterer::paint_clusters(cv::Mat &frame, int radius)
 {
     for(int i = 0; i < this->num_clusters; i++)
     {
@@ -112,7 +142,7 @@ void k_means_cluster_frame::paint_clusters(cv::Mat &frame, int radius)
     }
 }
 
-void k_means_cluster_frame::paint_clusters(cv::Mat &frame)
+void Clusterer::paint_clusters(cv::Mat &frame)
 {
     for(int i = 0; i < this->num_clusters; i++)
     {
