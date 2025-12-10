@@ -149,7 +149,8 @@ int squared_difference_between_two_points(Point i1, Point i2)//because sqrt is s
 
 int element_is_within_radius(Point cur_point, int i, int j, int radius)
 {
-    return squared_difference_between_two_points(cur_point, Point{i,j}) < radius*radius;
+    int squared_difference = squared_difference_between_two_points(cur_point, Point{j,i});
+    return squared_difference < radius*radius;
 }
 
 
@@ -170,6 +171,10 @@ int point_is_core_point(Point cur_point, db_point ** arr, Point max_point, int r
             if(element_is_within_radius(cur_point, i, j, radius) && arr[i][j].point_type != not_a_point)
             {
                 num_points_within_radius++;
+                if(num_points_within_radius >= minPts)
+                {
+                    return 1==1;
+                }
             }
         }
     }
@@ -200,17 +205,52 @@ int point_is_border_point(Point cur_point, db_point ** arr, Point max_point, int
 
 cv::Vec3b set_pixel_color(int i)
 {
+    i = i % 20; 
     cv::Vec3b return_pixel;
-    return_pixel[0] = colors[i][0];
+    return_pixel[0] = colors[i][2];
     return_pixel[1] = colors[i][1];
-    return_pixel[2] = colors[i][2];
+    return_pixel[2] = colors[i][0];
     return return_pixel;
 }
 
-void db_scan(cv::Mat &frame, int radius, int minPts)
+void label(int cluster, Point cur_point, db_point ** arr)
 {
+    arr[cur_point.y][cur_point.x].cluster_num = cluster;
+}
+
+
+void label_neighbors(Point cur_point, db_point ** arr, Point max_point, int radius, int cluster)
+{
+    int left_bound, right_bound, top_bound, bottom_bound;
+    left_bound = cur_point.x - radius > 0 ? cur_point.x-radius : 0;
+    top_bound = cur_point.y - radius > 0 ? cur_point.y - radius : 0;
+    right_bound = cur_point.x + radius < max_point.x ? cur_point.x + radius: max_point.x;
+    bottom_bound = cur_point.y + radius < max_point.y ? cur_point.y + radius: max_point.y;
+    
+    for(int i = top_bound; i <= bottom_bound; i++)
+    {
+        for(int j = left_bound; j <= right_bound; j++)
+        {
+            if(element_is_within_radius(cur_point, i, j, radius) && (arr[i][j].point_type == core_point || arr[i][j].point_type == border_point) && arr[i][j].cluster_num < 0)
+            {
+                label(cluster, Point {j,i}, arr);
+                label_neighbors(Point {j,i}, arr, max_point, radius, cluster);
+            }
+        }
+    }
+}
+
+void db_scan(cv::Mat &frame, int radius, int minPts, Point* &cluster_array, int& num_clusters)
+{
+    // use new dumbass
     db_point ** arr = NULL;
-    arr = (db_point**)malloc(frame.rows * frame.cols * sizeof(db_point));
+    arr = (db_point**)malloc(frame.rows*sizeof(db_point*));
+    Point max_point = {frame.cols-1, frame.rows-1};//the bottom right most pixel//defined so we have a boundry for scanning pixels
+    for(int i = 0; i < frame.rows; i++)
+    {
+        arr[i] = (db_point*)malloc(frame.cols*sizeof(db_point));
+    }
+
     for(int i = 0; i < frame.rows; i++)
     {
         for(int j = 0; j < frame.cols; j++)
@@ -233,7 +273,7 @@ void db_scan(cv::Mat &frame, int radius, int minPts)
         {
             if(arr[i][j].point_type == unlabeled_point)
             {
-                if(point_is_core_point(Point{i,j},arr,Point{frame.rows,frame.cols},radius,minPts))
+                if(point_is_core_point(Point{j,i},arr,max_point,radius,minPts))
                 {
                     arr[i][j].point_type = core_point;
                 }
@@ -246,7 +286,7 @@ void db_scan(cv::Mat &frame, int radius, int minPts)
         {
             if(arr[i][j].point_type == unlabeled_point)
             {
-                if(point_is_border_point(Point{i,j},arr,Point{frame.rows,frame.cols},radius,minPts))
+                if(point_is_border_point(Point{j,i},arr,max_point,radius,minPts))
                 {
                     arr[i][j].point_type = border_point;
                 }
@@ -258,26 +298,107 @@ void db_scan(cv::Mat &frame, int radius, int minPts)
         }
     }
 
+    
+
+    int current_cluster = 0;
     for(int i = 0; i < frame.rows; i++)
     {
         for(int j = 0; j < frame.cols; j++)
         {
-            if(arr[i][j].point_type == core_point)
+            if(arr[i][j].point_type == core_point && arr[i][j].cluster_num < 0)
             {
-                cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
-                cur_pixel = set_pixel_color(0);
-            }
-            else if (arr[i][j].point_type == border_point)
-            {
-                cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
-                cur_pixel = set_pixel_color(1);
-            }
-            else
-            {
-                cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
-                cur_pixel = set_pixel_color(2);
+                label(current_cluster, Point {j,i},arr);
+                label_neighbors(Point {j,i}, arr, max_point, radius, current_cluster);
+                current_cluster++;
             }
         }
     }
 
+    
+
+    
+    int type_coloring = 1 == 2;
+    if(type_coloring)
+    {
+        for(int i = 0; i < frame.rows; i++)
+        {
+            for(int j = 0; j < frame.cols; j++)
+            {
+                if(arr[i][j].point_type == core_point)
+                {
+                    cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
+                    cur_pixel = set_pixel_color(0);
+                }
+                else if (arr[i][j].point_type == border_point)
+                {
+                    cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
+                    cur_pixel = set_pixel_color(1);
+                }
+                else if (arr[i][j].point_type == noise_point)
+                {
+                    cv::Vec3b & cur_pixel = frame.at<cv::Vec3b>(i,j);
+                    cur_pixel = set_pixel_color(2);
+                }
+            }
+        }
+    }
+    else if (1 == 2)
+    {
+        for(int i = 0; i < frame.rows; i++)
+        {
+            for(int j = 0; j < frame.cols; j++)
+            {
+                if(arr[i][j].point_type == core_point || arr[i][j].point_type == border_point)
+                {
+                    frame.at<cv::Vec3b>(i,j) = set_pixel_color(arr[i][j].cluster_num);
+                }
+                else if (arr[i][j].point_type == noise_point)
+                {
+                    frame.at<cv::Vec3b>(i,j) = {255,255,255};
+                }
+
+            }
+        }
+    }
+
+    num_clusters = current_cluster+1;
+    cluster_array = (Point*) malloc(num_clusters*sizeof(Point));
+    for(int i = 0; i < num_clusters; i++)
+    {
+        cluster_array[i].x = 0;
+        cluster_array[i].y = 0;
+    }
+    int * total_pixels_per_cluster = new int[num_clusters]();
+    Point * total_x_and_y_per_cluster = new Point[num_clusters]();
+    for(int i = 0; i < frame.rows; i++)
+    {
+        for(int j = 0; j < frame.cols; j++)
+        {
+            if(arr[i][j].point_type == core_point || arr[i][j].point_type == border_point)
+            {
+                //frame.at<cv::Vec3b>(i,j) = set_pixel_color(arr[i][j].cluster_num);
+                total_pixels_per_cluster[arr[i][j].cluster_num]++;
+                total_x_and_y_per_cluster[arr[i][j].cluster_num].x += j;
+                total_x_and_y_per_cluster[arr[i][j].cluster_num].y += i;
+            }
+        }
+    }
+    for(int i = 0; i < num_clusters; i++)
+    {
+        if(total_pixels_per_cluster[i] > 1)
+        {
+            int center_x_pos = total_x_and_y_per_cluster[i].x / total_pixels_per_cluster[i];
+            int center_y_pos = total_x_and_y_per_cluster[i].y / total_pixels_per_cluster[i];
+            cluster_array[i].x = center_x_pos;
+            cluster_array[i].y = center_y_pos;
+        }
+        
+    }
+
+    
+    for(int i = 0; i < frame.rows; i++)
+    {
+        free(arr[i]);
+    }
+    free(arr);
 }
